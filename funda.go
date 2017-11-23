@@ -1,4 +1,4 @@
-package main
+package funda
 
 import (
 	"encoding/json"
@@ -10,19 +10,22 @@ import (
 	"strconv"
 )
 
-type fundaObject struct {
-	id            string
-	address       string
-	price         int64
-	url           url.URL
-	imageURL      url.URL
-	surfaceArea   int
-	numberOfRooms int
+// Object represents a building object (e.g. house, apartment) at Funda.
+type Object struct {
+	ID            string
+	Address       string
+	Price         int64
+	URL           url.URL
+	ImageURL      url.URL
+	SurfaceArea   int
+	NumberOfRooms int
 }
 
-type fundaObjects []*fundaObject
+// Objects is an array of Funda objects.
+type Objects []*Object
 
-type fundaSearchResult struct {
+// SearchResult represents search result data from Funda.
+type SearchResult struct {
 	// AccountStatus     int         `json:"AccountStatus"`
 	// EmailNotConfirmed bool        `json:"EmailNotConfirmed"`
 	// ValidationFailed  bool        `json:"ValidationFailed"`
@@ -167,14 +170,15 @@ type fundaSearchResult struct {
 	TotaalAantalObjecten int `json:"TotaalAantalObjecten"`
 }
 
-func searchFunda(fundaToken, fundaSearchOptions string, page, pageSize int) (io.ReadCloser, error) {
+// Search performs a search request at Funda.
+func Search(token, opts string, page, pageSize int) (io.ReadCloser, error) {
 	req, err := http.NewRequest("GET", "", nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "Funda/0 CFNetwork/887 Darwin/17.0.0")
 
-	u, err := fundaSearchURL(fundaToken, fundaSearchOptions, page, pageSize)
+	u, err := searchURL(token, opts, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -196,8 +200,9 @@ func searchFunda(fundaToken, fundaSearchOptions string, page, pageSize int) (io.
 	return resp.Body, nil
 }
 
-func fundaObjectsFromSearchResult(r io.Reader) (objects fundaObjects, pageCount int, err error) {
-	var result fundaSearchResult
+// ObjectsFromSearchResult parses raw search result data into an Objects value.
+func ObjectsFromSearchResult(r io.Reader) (objects Objects, pageCount int, err error) {
+	var result SearchResult
 	if err = json.NewDecoder(r).Decode(&result); err != nil {
 		return
 	}
@@ -206,27 +211,27 @@ func fundaObjectsFromSearchResult(r io.Reader) (objects fundaObjects, pageCount 
 
 	for _, o := range result.Objects {
 		var houseURL, imageURL *url.URL
-		object := &fundaObject{}
+		object := &Object{}
 
-		object.id = o.ID
-		object.address = o.Adres
-		object.price = o.Prijs.Koopprijs
-		object.surfaceArea = o.Woonoppervlakte
-		object.numberOfRooms = o.AantalKamers
+		object.ID = o.ID
+		object.Address = o.Adres
+		object.Price = o.Prijs.Koopprijs
+		object.SurfaceArea = o.Woonoppervlakte
+		object.NumberOfRooms = o.AantalKamers
 
 		houseURL, err = url.Parse(o.URL)
 		if err != nil {
-			log.Printf("Error parsing house URL: %s", err)
+			log.Printf("funda: error parsing house URL: %s", err)
 			return
 		}
-		object.url = *houseURL
+		object.URL = *houseURL
 
 		imageURL, err = url.Parse(o.FotoLargest)
 		if err != nil {
-			log.Printf("Error parsing image URL: %s", err)
+			log.Printf("funda: error parsing image URL: %s", err)
 			return
 		}
-		object.imageURL = *imageURL
+		object.ImageURL = *imageURL
 
 		objects = append(objects, object)
 	}
@@ -234,7 +239,7 @@ func fundaObjectsFromSearchResult(r io.Reader) (objects fundaObjects, pageCount 
 	return
 }
 
-func fundaSearchURL(token, searchOptions string, page, pageSize int) (*url.URL, error) {
+func searchURL(token, searchOptions string, page, pageSize int) (*url.URL, error) {
 	u, err := url.Parse("http://partnerapi.funda.nl/feeds/Aanbod.svc/search/json/" + token + "/")
 	if err != nil {
 		return nil, err
